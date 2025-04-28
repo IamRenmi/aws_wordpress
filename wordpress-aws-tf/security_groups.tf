@@ -1,35 +1,12 @@
-# Define Security Groups
+# Define Security Groups and their Rules
+
+# --- Define Security Groups (without ingress/egress rules initially) ---
 
 # Security Group for the Application Load Balancer
-# Allows inbound HTTP and HTTPS traffic from anywhere
 resource "aws_security_group" "alb" {
   name        = "wordpress-alb-sg"
-  description = "Allow HTTP/HTTPS traffic to ALB"
+  description = "Security group for ALB"
   vpc_id      = aws_vpc.main.id
-
-  ingress {
-    description = "Allow HTTP from anywhere"
-    from_port   = 80
-    to_port     = 80
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  ingress {
-    description = "Allow HTTPS from anywhere"
-    from_port   = 443
-    to_port     = 443
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  egress {
-    description = "Allow all outbound traffic"
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
 
   tags = {
     Name = "wordpress-alb-sg"
@@ -37,99 +14,21 @@ resource "aws_security_group" "alb" {
 }
 
 # Security Group for WordPress Instances (behind ALB)
-# Allows inbound HTTP/HTTPS traffic ONLY from the ALB security group
-# Allows outbound to RDS, ElastiCache, EFS, and NAT Gateway (for internet)
 resource "aws_security_group" "wordpress" {
   name        = "wordpress-instance-sg"
-  description = "Allow traffic from ALB, and outbound to DB, Cache, EFS"
+  description = "Security group for WordPress instances"
   vpc_id      = aws_vpc.main.id
-
-  # Allow inbound traffic from the ALB security group
-  ingress {
-    description     = "Allow HTTP from ALB"
-    from_port       = 80
-    to_port         = 80
-    protocol        = "tcp"
-    security_groups = [aws_security_group.alb.id]
-  }
-
-  ingress {
-    description     = "Allow HTTPS from ALB"
-    from_port       = 443
-    to_port         = 443
-    protocol        = "tcp"
-    security_groups = [aws_security_group.alb.id]
-  }
-
-  # Allow outbound traffic to the RDS security group (MySQL/MariaDB port)
-  egress {
-    description     = "Allow outbound to RDS"
-    from_port       = 3306
-    to_port         = 3306
-    protocol        = "tcp"
-    security_groups = [aws_security_group.rds.id]
-  }
-
-  # Allow outbound traffic to the ElastiCache security group (Memcached port)
-  egress {
-    description     = "Allow outbound to ElastiCache"
-    from_port       = 11211 # Default Memcached port
-    to_port         = 11211
-    protocol        = "tcp"
-    security_groups = [aws_security_group.elasticache.id]
-  }
-
-  # Allow outbound traffic to the EFS security group (NFS port)
-  egress {
-    description     = "Allow outbound to EFS"
-    from_port       = 2049 # NFS port
-    to_port         = 2049
-    protocol        = "tcp"
-    security_groups = [aws_security_group.efs.id]
-  }
-
-  # Allow outbound traffic to the NAT Gateway (for internet access for updates, etc.)
-  # This rule is often implicitly handled by the route table, but explicitly allowing
-  # outbound traffic to all destinations is common for application instances.
-  egress {
-    description = "Allow all outbound traffic to internet via NAT Gateway"
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
 
   tags = {
     Name = "wordpress-instance-sg"
   }
 }
 
-
 # Security Group for RDS Database
-# Allows inbound traffic ONLY from the WordPress instance security group
 resource "aws_security_group" "rds" {
   name        = "wordpress-rds-sg"
-  description = "Allow traffic to RDS from WordPress instances"
+  description = "Security group for RDS database"
   vpc_id      = aws_vpc.main.id
-
-  # Allow inbound traffic from the WordPress instance security group
-  ingress {
-    description     = "Allow MySQL/MariaDB from WordPress instances"
-    from_port       = 3306
-    to_port         = 3306
-    protocol        = "tcp"
-    security_groups = [aws_security_group.wordpress.id]
-  }
-
-  # RDS typically doesn't need specific egress rules unless connecting to external services (rare)
-  egress {
-    description = "Allow all outbound traffic"
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
 
   tags = {
     Name = "wordpress-rds-sg"
@@ -137,29 +36,10 @@ resource "aws_security_group" "rds" {
 }
 
 # Security Group for ElastiCache Memcached
-# Allows inbound traffic ONLY from the WordPress instance security group
 resource "aws_security_group" "elasticache" {
   name        = "wordpress-elasticache-sg"
-  description = "Allow traffic to ElastiCache from WordPress instances"
+  description = "Security group for ElastiCache Memcached"
   vpc_id      = aws_vpc.main.id
-
-  # Allow inbound traffic from the WordPress instance security group
-  ingress {
-    description     = "Allow Memcached from WordPress instances"
-    from_port       = 11211 # Default Memcached port
-    to_port         = 11211
-    protocol        = "tcp"
-    security_groups = [aws_security_group.wordpress.id]
-  }
-
-  # ElastiCache typically doesn't need specific egress rules
-  egress {
-    description = "Allow all outbound traffic"
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
 
   tags = {
     Name = "wordpress-elasticache-sg"
@@ -167,29 +47,10 @@ resource "aws_security_group" "elasticache" {
 }
 
 # Security Group for EFS Mount Targets
-# Allows inbound NFS traffic from the WordPress instance security group
 resource "aws_security_group" "efs" {
   name        = "wordpress-efs-sg"
-  description = "Allow NFS traffic to EFS from WordPress instances"
+  description = "Security group for EFS mount targets"
   vpc_id      = aws_vpc.main.id
-
-  # Allow inbound traffic from the WordPress instance security group
-  ingress {
-    description     = "Allow NFS from WordPress instances"
-    from_port       = 2049 # NFS port
-    to_port         = 2049
-    protocol        = "tcp"
-    security_groups = [aws_security_group.wordpress.id]
-  }
-
-  # EFS Mount Targets typically don't need specific egress rules
-  egress {
-    description = "Allow all outbound traffic"
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
 
   tags = {
     Name = "wordpress-efs-sg"
@@ -197,43 +58,231 @@ resource "aws_security_group" "efs" {
 }
 
 # Security Group for Bastion Host (Optional)
-# Allows inbound SSH traffic from a defined CIDR block
-# Allows outbound traffic to private subnets (SSH)
 resource "aws_security_group" "bastion" {
   count       = var.create_bastion_host ? 1 : 0
   name        = "wordpress-bastion-sg"
-  description = "Allow SSH access to Bastion host"
+  description = "Security group for Bastion host"
   vpc_id      = aws_vpc.main.id
-
-  # Allow inbound SSH from specified CIDR block
-  ingress {
-    description = "Allow SSH from allowed_ssh_cidr"
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
-    cidr_blocks = var.allowed_ssh_cidr # **IMPORTANT: Change this variable to your IP**
-  }
-
-  # Allow outbound SSH to WordPress instances (in private app subnets)
-  egress {
-    description     = "Allow outbound SSH to WordPress instances"
-    from_port       = 22
-    to_port         = 22
-    protocol        = "tcp"
-    security_groups = [aws_security_group.wordpress.id]
-  }
-
-  # Allow outbound SSH to RDS (optional, for direct DB access from bastion)
-   egress {
-     description     = "Allow outbound SSH to RDS (optional)"
-     from_port       = 3306
-     to_port         = 3306
-     protocol        = "tcp"
-     security_groups = [aws_security_group.rds.id]
-   }
 
   tags = {
     Name = "wordpress-bastion-sg"
   }
 }
 
+# --- Define Security Group Rules ---
+
+# ALB Ingress Rules (Allow HTTP/HTTPS from anywhere)
+resource "aws_security_group_rule" "alb_ingress_http" {
+  type              = "ingress"
+  from_port         = 80
+  to_port           = 80
+  protocol          = "tcp"
+  cidr_blocks       = ["0.0.0.0/0"]
+  security_group_id = aws_security_group.alb.id
+  description       = "Allow HTTP from anywhere"
+}
+
+resource "aws_security_group_rule" "alb_ingress_https" {
+  type              = "ingress"
+  from_port         = 443
+  to_port           = 443
+  protocol          = "tcp"
+  cidr_blocks       = ["0.0.0.0/0"]
+  security_group_id = aws_security_group.alb.id
+  description       = "Allow HTTPS from anywhere"
+}
+
+# ALB Egress Rule (Allow all outbound)
+resource "aws_security_group_rule" "alb_egress_all" {
+  type              = "egress"
+  from_port         = 0
+  to_port           = 0
+  protocol          = "-1"
+  cidr_blocks       = ["0.0.0.0/0"]
+  security_group_id = aws_security_group.alb.id
+  description       = "Allow all outbound traffic"
+}
+
+# WordPress Instance Ingress Rules (Allow HTTP/HTTPS from ALB SG)
+resource "aws_security_group_rule" "wordpress_ingress_alb_http" {
+  type                     = "ingress"
+  from_port                = 80
+  to_port                  = 80
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.alb.id
+  security_group_id        = aws_security_group.wordpress.id
+  description              = "Allow HTTP from ALB SG"
+}
+
+resource "aws_security_group_rule" "wordpress_ingress_alb_https" {
+  type                     = "ingress"
+  from_port                = 443
+  to_port                  = 443
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.alb.id
+  security_group_id        = aws_security_group.wordpress.id
+  description              = "Allow HTTPS from ALB SG"
+}
+
+# WordPress Instance Egress Rules (Allow outbound to RDS, ElastiCache, EFS, Internet)
+resource "aws_security_group_rule" "wordpress_egress_rds" {
+  type                     = "egress"
+  from_port                = 3306
+  to_port                  = 3306
+  protocol                 = "tcp"
+  destination_security_group_id = aws_security_group.rds.id
+  security_group_id        = aws_security_group.wordpress.id
+  description              = "Allow outbound to RDS SG"
+}
+
+resource "aws_security_group_rule" "wordpress_egress_elasticache" {
+  type                     = "egress"
+  from_port                = 11211 # Default Memcached port
+  to_port                  = 11211
+  protocol                 = "tcp"
+  destination_security_group_id = aws_security_group.elasticache.id
+  security_group_id        = aws_security_group.wordpress.id
+  description              = "Allow outbound to ElastiCache SG"
+}
+
+resource "aws_security_group_rule" "wordpress_egress_efs" {
+  type                     = "egress"
+  from_port                = 2049 # NFS port
+  to_port                  = 2049
+  protocol                 = "tcp"
+  destination_security_group_id = aws_security_group.efs.id
+  security_group_id        = aws_security_group.wordpress.id
+  description              = "Allow outbound to EFS SG"
+}
+
+# Allow outbound traffic to the NAT Gateway (for internet access for updates, etc.)
+# This rule is often implicitly handled by the route table, but explicitly allowing
+# outbound traffic to all destinations is common for application instances.
+resource "aws_security_group_rule" "wordpress_egress_internet" {
+  type              = "egress"
+  from_port         = 0
+  to_port           = 0
+  protocol          = "-1"
+  cidr_blocks       = ["0.0.0.0/0"]
+  security_group_id = aws_security_group.wordpress.id
+  description       = "Allow all outbound traffic to internet via NAT Gateway"
+}
+
+
+# RDS Ingress Rule (Allow MySQL/MariaDB from WordPress SG)
+resource "aws_security_group_rule" "rds_ingress_wordpress" {
+  type                     = "ingress"
+  from_port                = 3306
+  to_port                  = 3306
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.wordpress.id
+  security_group_id        = aws_security_group.rds.id
+  description              = "Allow MySQL/MariaDB from WordPress SG"
+}
+
+# RDS Egress Rule (Allow all outbound - typically not needed unless connecting to external services)
+resource "aws_security_group_rule" "rds_egress_all" {
+  type              = "egress"
+  from_port         = 0
+  to_port           = 0
+  protocol          = "-1"
+  cidr_blocks       = ["0.0.0.0/0"]
+  security_group_id = aws_security_group.rds.id
+  description       = "Allow all outbound traffic"
+}
+
+
+# ElastiCache Ingress Rule (Allow Memcached from WordPress SG)
+resource "aws_security_group_rule" "elasticache_ingress_wordpress" {
+  type                     = "ingress"
+  from_port                = 11211 # Default Memcached port
+  to_port                  = 11211
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.wordpress.id
+  security_group_id        = aws_security_group.elasticache.id
+  description              = "Allow Memcached from WordPress SG"
+}
+
+# ElastiCache Egress Rule (Allow all outbound - typically not needed)
+resource "aws_security_group_rule" "elasticache_egress_all" {
+  type              = "egress"
+  from_port         = 0
+  to_port           = 0
+  protocol          = "-1"
+  cidr_blocks       = ["0.0.0.0/0"]
+  security_group_id = aws_security_group.elasticache.id
+  description       = "Allow all outbound traffic"
+}
+
+
+# EFS Ingress Rule (Allow NFS from WordPress SG)
+resource "aws_security_group_rule" "efs_ingress_wordpress" {
+  type                     = "ingress"
+  from_port                = 2049 # NFS port
+  to_port                  = 2049
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.wordpress.id
+  security_group_id        = aws_security_group.efs.id
+  description              = "Allow NFS from WordPress SG"
+}
+
+# EFS Egress Rule (Allow all outbound - typically not needed)
+resource "aws_security_group_rule" "efs_egress_all" {
+  type              = "egress"
+  from_port         = 0
+  to_port           = 0
+  protocol          = "-1"
+  cidr_blocks       = ["0.0.0.0/0"]
+  security_group_id = aws_security_group.efs.id
+  description       = "Allow all outbound traffic"
+}
+
+
+# Bastion Host Ingress Rule (Allow SSH from allowed_ssh_cidr)
+resource "aws_security_group_rule" "bastion_ingress_ssh" {
+  count             = var.create_bastion_host ? 1 : 0
+  type              = "ingress"
+  from_port         = 22
+  to_port           = 22
+  protocol          = "tcp"
+  cidr_blocks       = var.allowed_ssh_cidr # **IMPORTANT: Change this variable to your IP**
+  security_group_id = aws_security_group.bastion[0].id
+  description       = "Allow SSH from allowed_ssh_cidr"
+}
+
+# Bastion Host Egress Rule (Allow outbound SSH to WordPress SG)
+resource "aws_security_group_rule" "bastion_egress_wordpress_ssh" {
+  count                        = var.create_bastion_host ? 1 : 0
+  type                         = "egress"
+  from_port                    = 22
+  to_port                      = 22
+  protocol                     = "tcp"
+  destination_security_group_id = aws_security_group.wordpress.id
+  security_group_id            = aws_security_group.bastion[0].id
+  description                  = "Allow outbound SSH to WordPress SG"
+}
+
+# Bastion Host Egress Rule (Allow outbound SSH to RDS SG - optional)
+ resource "aws_security_group_rule" "bastion_egress_rds_ssh" {
+   count                         = var.create_bastion_host ? 1 : 0
+   type                          = "egress"
+   from_port                     = 3306
+   to_port                       = 3306
+   protocol                      = "tcp"
+   destination_security_group_id = aws_security_group.rds.id
+   security_group_id             = aws_security_group.bastion[0].id
+   description                   = "Allow outbound SSH to RDS SG (optional)"
+ }
+
+
+# Bastion Host Egress Rule (Allow all outbound - optional, often limited for bastion)
+resource "aws_security_group_rule" "bastion_egress_all" {
+  count             = var.create_bastion_host ? 1 : 0
+  type              = "egress"
+  from_port         = 0
+  to_port           = 0
+  protocol          = "-1"
+  cidr_blocks       = ["0.0.0.0/0"]
+  security_group_id = aws_security_group.bastion[0].id
+  description       = "Allow all outbound traffic"
+}
